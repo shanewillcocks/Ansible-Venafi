@@ -1,0 +1,68 @@
+---
+# Format san json from vars
+- name: Get subalt names from inventory hostvars
+  ansible.builtin.set_fact:
+    hostvar_subalt_names: "{{ san_names.split(';') }}"
+  when: san_names is defined
+
+- name: Format Subject Alt Names (list of dictionaries)
+  block:
+    - name: Add host shortname to SAN dict
+      ansible.builtin.set_fact:
+        san_list: >-
+          {{
+            san_list | default([]) +
+            [{
+              "TypeName": "DNS",
+              "Name": "{{ ansible_hostname }}"
+            }]
+          }}
+    - name: Add host fqdn to SAN dict
+      ansible.builtin.set_fact:
+        san_list: >-
+          {{
+            san_list +
+            [{
+              "TypeName": "DNS",
+              "Name": ansible_fqdn
+            }]
+          }}
+    - name: Add hostvar subalts to SAN dict
+      ansible.builtin.set_fact:
+        san_list: >-
+          {{
+            san_list +
+            [{
+              "TypeName": "DNS",
+              "Name": item
+            }]
+          }}
+      loop: "{{ hostvar_subalt_names }}"
+      when: hostvar_subalt_names is defined
+    - name: Add custom subalts to SAN dict
+      set_fact:
+        san_list: >-
+          {{
+            san_list +
+            [{
+              "TypeName": "DNS",
+              "Name": item
+            }]
+          }}
+      loop: "{{ subalt_names }}"
+    - name: Add IP addresses to SAN dict
+      ansible.builtin.set_fact:
+        san_list: >-
+          {{
+            san_list +
+            [{
+              "TypeName": "IPAddress",
+              "Name": item
+            }]
+          }}
+      loop: "{{ ansible_ip_addresses }}"
+
+- name: Dump subalt details
+  ansible.builtin.debug:
+    msg: "{{ san_list }}"
+  when: debug_mode | bool
