@@ -1,0 +1,28 @@
+---
+# Authenticate and retrieve access token
+- name: Authenticate to Venafi
+  ansible.windows.win_uri:
+    url: "{{ venafi_url }}/vedauth/authorize/oauth"
+    url_username: "{{ venafi_user }}"
+    url_password: "{{ venafi_pwd }}"
+    force_basic_auth: true
+    timeout: 60
+    return_content: true
+    method: POST
+    headers:
+      Accept: 'application/json'
+      Content-Type: 'application/json'
+    body: "{ \"username\": \"{{ venafi_user }}\", \"password\": \"{{ venafi_pwd }}\",  \"client_id\": \"ven-api\", \"scope\": \"certificate:manage,revoke;configuration:manage\" }"
+    status_code: 200
+  register: venafi_auth_reg
+  no_log: false
+
+- name: Set auth facts
+  block:
+    - set_fact:
+        access_token: "{{ venafi_auth_reg.json.access_token }}"
+    - set_fact:
+        authenticated: true
+    - debug:
+        msg: "Auth succeeded, retrieved Venafi access token"
+      when: venafi_auth_reg.status_code == 200
