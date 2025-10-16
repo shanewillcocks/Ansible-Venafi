@@ -1,0 +1,25 @@
+---
+# Send certificate renewal to venafi
+- name: Format message body
+  ansible.builtin.set_fact:
+    msg_body: '{ "CertificateDN": ""{{ venafi_zone }}\\{{ ansible_fqdn }}", "WorkToDoTimeout": "60" }'
+
+- name: Send certificate request to Venafi
+  ansible.windows.win_uri:
+    url: "{{ venafi_url }}/vedsdk/Certificates/Renew"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ access_token }}"
+      Content-Type: 'application/json'
+    body: "{{ msg_body }}"
+    return_content: true
+  register: renew_cert_reg
+
+- name: Dump json response from Venafi
+  ansible.builtin.debug:
+    msg: "{{ renew_cert_reg }}"
+  when: debug_mode | bool
+
+- ansible.builtin.debug:
+    msg: "Renew request succeeded"
+  when: renew_cert_reg.status_code == 200
