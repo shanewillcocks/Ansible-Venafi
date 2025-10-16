@@ -1,0 +1,27 @@
+---
+- name: Authenticate to Venafi API
+  ansible.builtin.uri:
+    url: "{{ venafi_url }}/vedauth/authorize/oauth"
+    url_username: "{{ venafi_user }}"
+    url_password: "{{ venafi_pwd }}"
+    force_basic_auth: true
+    timeout: 60
+    method: POST
+    headers:
+      Accept: 'application/json'
+      Content-Type: 'application/json'
+    body: "{ \"username\": \"{{ venafi_user }}\", \"password\": \"{{ venafi_pwd }}\",  \"client_id\": \"ven-api\", \"scope\": \"certificate:manage,revoke;configuration:manage\" }"
+    body_format: json
+    status_code: 200
+  register: venafi_auth_reg
+  no_log: true
+
+- name: Set auth facts
+  block:
+    - ansible.builtin.set_fact:
+        access_token: "{{ venafi_auth_reg.json.access_token }}"
+    - ansible.builtin.set_fact:
+        authenticated: true
+    - ansible.builtin.debug:
+        msg: "Auth succeeded, retrieved Venafi access token"
+  when: venafi_auth_reg.status == 200
