@@ -1,0 +1,42 @@
+---
+- name: Format message body
+  ansible.builtin.set_fact:
+    msg_body: '{ "CertificateDN": "{{ venafi_zone }}\\{{ ansible_fqdn }}", "Format": "{{ format }}", "Password": "{{ cert_pwd }}", "FriendlyName": "{{ ansible_fqdn }}", "CustomFields": [ { "Name": "ApplicationID", "Values": ["{{ app_id }}"] }, { "Name": "Environment", "Values": ["{{ env_name }}"] } ], "IncludePrivateKey": "true", "IncludeChain": "true", "RootFirstOrder": "false", "WorkToDoTimeout": "30" }'
+  when: format != "JKS"
+  no_log: true
+- name: Format JKS message body
+  ansible.builtin.set_fact:
+    msg_body:  '{ "CertificateDN": "{{ venafi_zone }}\\{{ ansible_fqdn }}", "Format": "{{ format }}", "Password": "{{ cert_pwd }}", "KeystorePassword": "{{ cert_pwd }}", "FriendlyName": "{{ ansible_fqdn }}", "CustomFields": [ { "Name": "ApplicationID", "Values": ["{{ app_id }}"] }, { "Name": "Environment", "Values": ["{{ env_name }}"] } ], "IncludePrivateKey": "true", "IncludeChain": "true", "RootFirstOrder": "false", "WorkToDoTimeout": "30" }'
+  when: format == "JKS"
+  no_log: true
+
+- name: Dump message body for retrieve
+  ansible.builtin.debug:
+    msg: "Sending retrieve messge body: {{ msg_body }}"
+  when: debug_mode | bool
+
+- name: Retrieve certificate from Venafi
+  ansible.builtin.uri:
+    url: "{{ venafi_url }}/vedsdk/certificates/Retrieve"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ access_token }}"
+      Content-Type: 'application/json'
+    body: "{{ msg_body }}"
+    body_format: json
+    status_code: 200
+  register: retrieve_cert_reg
+
+- name: Parse certificate response data
+  block:
+    - ansible.builtin.set_fact:
+        certificate_data: "{{ retrieve_cert_reg.json.CertificateData }}"
+    - ansible.builtin.set_fact:
+        cert_filename: "{{ retrieve_cert_reg.json.Filename }}"
+
+- name: Save certificate file
+  become: true
+  ansible.builtin.copy:
+    content: "{{ certificate_data }}"
+    dest: "{{ venafi_working_dir }}/{{ cert_filename }}"
+  when: retrieve_cert_reg.status == 200
