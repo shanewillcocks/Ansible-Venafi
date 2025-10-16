@@ -1,0 +1,50 @@
+---
+- name: Check Venafi credential is present
+  ansible.builtin.fail:
+    msg: "Venafi credentials appear to be missing, check you have added you Venafi service account credentials"
+  when: venafi_user is undefined
+
+- name: Set host and Venafi facts
+  block:
+    - ansible.windows.setup:
+    - ansible.builtin.set_fact:
+        venafi_zone: "{{ override_venafi_zone }}"
+      when: (override_venafi_zone is defined) and (override_venafi_zone | length > 0)
+    - ansible.builtin.set_fact:
+        venafi_working_dir: "{{ override_working_dir }}"
+      when: (override_working_dir is defined) and (override_working_dir | length > 0)
+    - ansible.builtin.set_fact:
+        format: "PKCS #12"
+      when: cert_format | lower == "pkcs12"
+- name: Ensure working directory exists
+  ansible.windows.win_file:
+    path: "{{ venafi_working_dir }}"
+    state: directory
+- include_tasks: authenticate.yml
+- include_tasks: check_existing_cert.yml
+- name: Retrieve existing certficates only
+  block:
+    - ansible.builtin.debug:
+        msg: "Existing certificate has more than six months before expiry, retrieve only"
+    - include_tasks: retrieve_certs.yml
+  when: cert_exists|bool and renew_cert|bool == false
+- name: Renew existing certificates as less than six months to expiry
+  block:
+    - ansible.builtin.debug:
+        msg: "Existing certificate will be renewed"
+    - include_tasks: renew_certs.yml
+    - ansible.builtin.pause:
+        seconds: 60
+    - include_tasks: retrieve_certs.yml
+  when: renew_cert|bool
+- name: Generate new certificates
+  block:
+    - ansible.builtin.debug:
+        msg: "Generating new certificates"
+    - include_tasks: format_san_list.yml
+    - include_tasks: request_certs.yml
+    - ansible.builtin.pause:
+        seconds: 60
+    - include_tasks: retrieve_certs.yml
+  when: cert_exists|bool == false
+- include_tasks: revoke_auth.yml
