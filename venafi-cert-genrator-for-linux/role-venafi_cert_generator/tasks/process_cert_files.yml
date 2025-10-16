@@ -1,0 +1,49 @@
+--- 
+- name: Process Base64 cert files
+  become: true
+  block:
+    - name: Decode and save certificate and private key
+      shell: /usr/bin/base64 --decode "{{ venafi_working_dir }}/{{ cert_filename }}" > "{{ venafi_working_dir }}/{{ ansible_fqdn }}.cert"
+    - name: Extract the private key to a tmp file
+      shell: /usr/bin/cat "{{ venafi_working_dir }}/{{ ansible_fqdn }}.cert" | /usr/bin/sed -ne '/-BEGIN RSA PRIVATE KEY-/,/-END RSA PRIVATE KEY-/p' > "{{ venafi_working_dir }}/{{ ansible_fqdn }}.key.tmp"
+    - name: Convert the private key
+      shell: "/usr/bin/openssl rsa -in {{ venafi_working_dir }}/{{ ansible_fqdn }}.key.tmp -passin 'pass:{{ cert_pwd }}' -text > {{ venafi_working_dir }}/{{ ansible_fqdn }}.key 2>/dev/null"
+    - name: Save pubcert and remove private key
+      shell: /usr/bin/openssl x509 -inform PEM -in "{{ venafi_working_dir }}/{{ ansible_fqdn }}.cert" > "{{ venafi_working_dir }}/{{ ansible_fqdn }}.crt"
+    - name: Remove tmp key file
+      ansible.builtin.file:
+        path: "{{ venafi_working_dir }}/{{ ansible_fqdn }}.key.tmp"
+        state: absent
+  when: cert_format | lower == "base64"
+
+- name: Convert Base64 file to JKS
+  become: true
+  block:
+    - ansible.builtin.debug:
+        msg: "Base64 decoding {{ cert_filename }}"
+    # Rename downloaded pfx before decoding
+    - ansible.builtin.copy:
+        remote_src: true
+        src: "{{ venafi_working_dir }}/{{ cert_filename }}"
+        dest: "{{ venafi_working_dir }}/{{ cert_filename }}.b64"
+    - ansible.builtin.file:
+        path: "{{ venafi_working_dir }}/{{ cert_filename }}"
+        state: absent
+    - ansible.builtin.shell: /usr/bin/openssl base64 -d -A -in "{{ venafi_working_dir }}/{{ cert_filename }}.b64" -out "{{ venafi_working_dir }}/{{ ansible_fqdn }}.jks"
+  when: cert_format | lower == "jks"
+
+- name: Convert Base64 file to PKCS12
+  become: true
+  block:
+    - ansible.builtin.debug:
+        msg: "Base64 decoding {{ cert_filename }}"
+    # Rename downloaded pfx before decoding
+    - ansible.builtin.copy:
+        remote_src: true
+        src: "{{ venafi_working_dir }}/{{ cert_filename }}"
+        dest: "{{ venafi_working_dir }}/{{ cert_filename }}.b64"
+    - ansible.builtin.file:
+        path: "{{ venafi_working_dir }}/{{ cert_filename }}"
+        state: absent
+    - ansible.builtin.shell: /usr/bin/openssl base64 -d -A -in "{{ venafi_working_dir }}/{{ cert_filename }}.b64" -out "{{ venafi_working_dir }}/{{ ansible_fqdn }}.pfx"
+  when: cert_format | lower == "pkcs12"
