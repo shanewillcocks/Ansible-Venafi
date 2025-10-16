@@ -1,0 +1,6 @@
+---
+debug_mode: false
+venafi_url: "https://venafi.api.endpoint.com"
+cert_format: "base64" # Override this with either pkcs12 or jks as required
+subalt_names: [] # Override this by passing in custom subject alt names - leaving blank will default to short hostname only
+venafi_working_dir: "/tmp/certs/{{ ansible_fqdn }}" # Override cert destination in AAP survey
