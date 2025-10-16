@@ -1,0 +1,14 @@
+---
+debug_mode: true
+venafi_url: "https://venafi.api.endpoint.com"
+cert_format: "pkcs12"
+hostvar_subalt_names: [] # This is populated from hostvar in the AAP inventory
+subalt_names: [] # Override this by passing in optional subject alt names from AAP survey
+venafi_working_dir: "C:/Temp/Certs/{{ ansible_fqdn }}" # Override this in AAP survey
+cert_exists: false
+renew_cert: false
+ansible_connection: winrm
+ansible_port: 5985
+ansible_winrm_transport: kerberos
+venafi_date_format: '%Y-%m-%dT%H:%M:%S.0000000Z'
+system_date_format: '%Y-%m-%dT%H:%M:%SZ'
