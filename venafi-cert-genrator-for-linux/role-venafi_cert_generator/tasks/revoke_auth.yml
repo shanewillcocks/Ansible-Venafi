@@ -1,0 +1,14 @@
+---
+- name: Revoke authentication token
+  ansible.builtin.uri:
+    url: "{{ venafi_url }}/vedauth/Revoke/token"
+    method: GET
+    headers:
+      Accept: 'application/json'
+      Authorization: "Bearer {{ access_token }}"
+  register: revoke_token_reg
+  when: authenticated | bool
+
+- ansible.builtin.debug:
+    msg: "Access token revoked"
+  when: revoke_token_reg.status == 200
