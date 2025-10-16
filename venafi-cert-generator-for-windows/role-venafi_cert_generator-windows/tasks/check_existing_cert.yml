@@ -1,0 +1,71 @@
+---
+# Check if cert exists and parse details if found
+- name: Format message body
+  ansible.builtin.set_fact:
+    msg_body: '{ "ObjectDN": "{{ venafi_zone }}\\{{ ansible_fqdn }}" }'
+
+- name: Always renew existing cert if renew_anyway is yes
+  ansible.builtin.set_fact:
+    renew_cert: true
+  when: renew_anyway | lower == "yes"
+
+- name: Check for existing certificate
+  ansible.windows.win_uri:
+    url: "{{ venafi_url }}/vedsdk/Config/DnToGuid"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ access_token }}"
+      Content-Type: 'application/json'
+    body: "{{ msg_body }}"
+    return_content: true
+    status_code: [200, 400]
+  register: check_cert_reg
+
+- ansible.builtin.debug:
+    var: check_cert_reg
+  when: debug_mode|bool
+
+- ansible.builtin.debug:
+    msg: "Existing certificate not found for {{ ansible_fqdn }}"
+  when: check_cert_reg.json.Result == 400
+
+- name: Parse certificate response data
+  block:
+    - ansible.builtin.debug:
+        msg: "Existing certificate found for {{ ansible_fqdn }}"
+    - ansible.builtin.set_fact:
+        cert_exists: true
+    - ansible.builtin.set_fact:
+        certificate_guid: "{{ check_cert_reg.json.GUID }}"
+  when: check_cert_reg.json.Result == 1
+
+- name: Get details for existing certificate
+  block:
+    - ansible.windows.win_uri:
+        url: "{{ venafi_url }}/vedsdk/certificates/{{ certificate_guid }}"
+        return_content: true
+        method: GET
+        headers:
+          Authorization: "Bearer {{ access_token }}"
+          Content-Type: 'application/json'
+        status_code: 200
+      register: get_certificate_reg
+    - name: Check expiry date for existing certificate
+      block:
+        - name: Get validto datestamp
+          ansible.builtin.set_fact:
+            cert_expiry_date: "{{ get_certificate_reg.json.CertificateDetails.ValidTo }}"
+        - name: Get delta between now and expiry date
+          ansible.builtin.set_fact:
+            delta: "{{ (cert_expiry_date | to_datetime(venafi_date_format) - ansible_date_time.iso8601 | to_datetime(system_date_format)).total_seconds() }}"
+        - name: Calculate months to expiry
+          ansible.builtin.set_fact:
+            months_to_expiry: "{{ (( delta | int ) / 60 / 60 / 24  / 30 ) | int }}"
+        - ansible.builtin.debug:
+            msg: "Existing certificate expires {{ cert_expiry_date }} or in approximately {{ months_to_expiry }} months"
+        - name: Set renew cert flag
+          ansible.builtin.set_fact:
+            renew_cert: true
+          when:  months_to_expiry | int < 6
+      when: get_certificate_reg.status_code == 200
+  when: cert_exists|bool
