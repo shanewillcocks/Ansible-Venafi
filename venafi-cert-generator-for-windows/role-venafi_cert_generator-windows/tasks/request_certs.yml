@@ -1,0 +1,34 @@
+---
+# Send certificate request to venafi
+- name: Format message body
+  ansible.builtin.set_fact:
+    msg_body: '{ "Subject": "{{ ansible_fqdn }}", "Format": "{{ format }}", "Password": "{{ cert_pwd }}", "PolicyDN": "{{ venafi_zone }}", "SubjectAltNames": {{ san_list|to_json }}, "FriendlyName": "{{ ansible_fqdn }}", "CustomFields": [ { "Name": "ApplicationID", "Values": ["{{ app_id }}"] }, { "Name": "Environment", "Values": ["{{ env_name }}"] } ], "IncludePrivateKey": true, "IncludeChain": true, "RootFirstOrder": false, "WorkToDoTimeout": "30", "Reenable": true }'
+  no_log: true
+
+- name: Dump contents of message body
+  ansible.builtin.debug:
+    msg: "{{ msg_body }}"
+  when: debug_mode | bool
+
+- name: Send certificate request to Venafi
+  ansible.windows.win_uri:
+    url: "{{ venafi_url }}/vedsdk/certificates/Request"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ access_token }}"
+      Content-Type: 'application/json'
+    body: "{{ msg_body }}"
+    return_content: true
+  register: request_cert_reg
+
+- name: Dump json response from Venafi
+  ansible.builtin.debug:
+    msg: "{{ request_cert_reg }}"
+  when: debug_mode|bool
+
+- name: Parse certificate DN (needed for request API call)
+  ansible.builtin.set_fact:
+    cert_dn: "{{ request_cert_reg.json.CertificateDN }}"
+
+- ansible.builtin.debug:
+    msg: "Got cerificate DN: {{ cert_dn }}"
